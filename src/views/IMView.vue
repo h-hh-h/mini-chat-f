@@ -10,8 +10,8 @@ import ChatLayout from '../components/layout/ChatLayout.vue'
 
 <style scoped>
 .im-view {
-  height: 100vh;
-  width: 100vw;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
 }
 </style>

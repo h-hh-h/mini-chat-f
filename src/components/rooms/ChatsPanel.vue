@@ -19,7 +19,9 @@ const emit = defineEmits<{
 
 // 定义暴露给父组件的方法
 defineExpose({
-  initRooms
+  initRooms,
+  updateRoomUnreadCount,
+  updateRoomLastMessage
 })
 
 // 初始化依赖
@@ -42,6 +44,36 @@ watch(() => props.selectedRoom, (newRoom) => {
     rooms.value.unshift(newRoom)
   }
 })
+
+// 更新房间未读消息数
+function updateRoomUnreadCount(roomId: string, unreadCount: number) {
+  const room = rooms.value.find(r => r.roomId === roomId)
+  if (room) {
+    // 如果是增加未读消息数
+    if (unreadCount > 0) {
+      room.unread = (room.unread || 0) + unreadCount
+    } 
+    // 如果是重置未读消息数
+    else if (unreadCount === 0) {
+      room.unread = 0
+    }
+    // 其他情况（如负数）不做处理，避免异常值影响
+  }
+}
+
+// 更新房间最后消息
+function updateRoomLastMessage(roomId: string, lastMessage: string, lastMessageTime?: number) {
+  const room = rooms.value.find(r => r.roomId === roomId)
+  if (room) {
+    if (!room.lastMsgInfo) {
+      room.lastMsgInfo = {}
+    }
+    room.lastMsgInfo.content = lastMessage
+    if (lastMessageTime) {
+      room.lastMsgInfo.time = lastMessageTime
+    }
+  }
+}
 
 // 初始化房间列表
 async function initRooms() {

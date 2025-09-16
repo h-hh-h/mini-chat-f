@@ -43,8 +43,8 @@ const chatsPanelRef = ref<InstanceType<typeof ChatsPanel> | null>(null)
 // Contacts panel 引用
 const contactsPanelRef = ref<InstanceType<typeof ContactsPanel> | null>(null)
 
-// 用于触发ChatsPanel刷新的响应式变量
-const refreshChats = ref(0)
+// Chat window 引用
+const chatWindowRef = ref<InstanceType<typeof ChatWindow> | null>(null)
 
 // 添加房间详情面板显示状态
 const showRoomDetails = ref(false)
@@ -151,6 +151,46 @@ const connectWebSocket = () => {
       toast.add({ severity: 'error', summary: '错误', detail: 'WebSocket连接错误', life: 3000 })
     })
 
+    // 消息处理
+    wsClient.value.onMessage((message: any) => {
+      console.log('收到WebSocket消息:', message)
+      
+      // 避免重复显示自己发送的消息（通过WebSocket回传的）
+      const isOwnMessage = message.fromUid === userInfo.value.userId;
+      if (isOwnMessage && chatWindowRef.value) {
+        // 直接调用聊天窗口的handleNewMessage方法处理自己的消息
+        // 这样可以利用已有的去重逻辑
+        chatWindowRef.value.handleNewMessage(message);
+      } else {
+        // 更新聊天窗口中的消息（其他用户发送的消息）
+        if (chatWindowRef.value && selectedRoom.value?.roomId === message.roomId) {
+          chatWindowRef.value.handleNewMessage(message)
+        }
+        
+        // 更新房间列表中的最后消息和未读数（仅处理非自己发送的消息）
+        if (chatsPanelRef.value) {
+          // 使用 ChatsPanel 提供的方法更新房间状态，而不是强制刷新
+          if (typeof chatsPanelRef.value.updateRoomLastMessage === 'function') {
+            chatsPanelRef.value.updateRoomLastMessage(
+              message.roomId, 
+              message.content, 
+              message.serverTime
+            )
+          }
+        }
+        
+        // 显示新消息通知（如果不是当前房间的消息，且不是自己发送的消息）
+        if (selectedRoom.value?.roomId !== message.roomId && message.fromUid !== userInfo.value.userId) {
+          toast.add({
+            severity: 'info',
+            summary: '新消息',
+            detail: message.content,
+            life: 5000
+          })
+        }
+      }
+    })
+
     // 建立连接
     wsClient.value.connect()
   } catch (error) {
@@ -204,8 +244,8 @@ const handleNewRoom = (room: RoomSimpleInfo) => {
   // 切换到聊天板块
   switchSection('chats')
   
-  // 触发ChatsPanel刷新
-  refreshChats.value++
+  // 不再使用强制刷新，而是通过其他方式更新 ChatsPanel
+  // refreshChats.value++
 }
 
 // 处理从联系人面板选择房间的情况
@@ -223,6 +263,42 @@ const handleSelectRoom = (room: RoomSimpleInfo) => {
     }
   }, 0)
 }
+
+// 处理消息发送事件
+const handleMessageSent = (roomId: string, message: any) => {
+  // 使用 ChatsPanel 提供的方法更新房间列表中的最后消息，而不是强制刷新
+  if (chatsPanelRef.value && typeof chatsPanelRef.value.updateRoomLastMessage === 'function') {
+    chatsPanelRef.value.updateRoomLastMessage(roomId, message.content, message.serverTime)
+  }
+  
+  // 如果需要，也可以直接更新房间列表中的特定房间
+  // 这里使用直接更新方式，而不是通过刷新
+}
+
+// 处理未读消息数更新事件
+const handleUnreadUpdate = (roomId: string, unreadCount: number) => {
+  // 更新ChatsPanel中的房间未读数
+  if (chatsPanelRef.value && typeof chatsPanelRef.value.updateRoomUnreadCount === 'function') {
+    chatsPanelRef.value.updateRoomUnreadCount(roomId, unreadCount)
+  }
+  
+  // 如果当前选中的房间未读数被重置为0，则更新该房间的未读数显示
+  if (unreadCount === 0 && selectedRoom.value?.roomId === roomId) {
+    // 不再使用强制刷新，而是直接更新
+    if (chatsPanelRef.value && typeof chatsPanelRef.value.updateRoomUnreadCount === 'function') {
+      chatsPanelRef.value.updateRoomUnreadCount(roomId, unreadCount)
+    }
+  }
+}
+
+// 处理房间最后消息更新事件
+const handleLastMessageUpdate = (roomId: string, lastMessage: string, lastMessageTime?: number) => {
+  // 更新ChatsPanel中的房间最后消息
+  if (chatsPanelRef.value && typeof chatsPanelRef.value.updateRoomLastMessage === 'function') {
+    chatsPanelRef.value.updateRoomLastMessage(roomId, lastMessage, lastMessageTime)
+  }
+}
+
 </script>
 
 <template>
@@ -265,7 +341,6 @@ const handleSelectRoom = (room: RoomSimpleInfo) => {
         <div class="chats-contacts-content">
           <!-- Chats Section -->
           <ChatsPanel 
-            :key="refreshChats"
             :selected-room="selectedRoom"
             ref="chatsPanelRef"
             v-show="activeSection === 'chats' && !showRoomDetails" 
@@ -289,14 +364,19 @@ const handleSelectRoom = (room: RoomSimpleInfo) => {
     </div>
     
     <!-- Right Panel -->
-    <ChatWindow :selected-room="selectedRoom" />
+    <ChatWindow 
+      ref="chatWindowRef" 
+      :selected-room="selectedRoom" 
+      @message-sent="handleMessageSent"
+      @unread-update="handleUnreadUpdate"
+      @last-message-update="handleLastMessageUpdate" />
   </div>
 </template>
 
 <style scoped>
 .im-container {
   display: flex;
-  height: 100vh;
+  height: 100%;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
@@ -308,6 +388,7 @@ const handleSelectRoom = (room: RoomSimpleInfo) => {
   display: flex;
   flex-direction: column;
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.05);
+  height: 100%;
 }
 
 .chats-contacts-container {
