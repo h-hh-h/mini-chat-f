@@ -101,22 +101,19 @@ const initUserInfo = async () => {
   try {
     loadingUserInfo.value = true
 
-    // 从会话中获取用户信息
-    const sessionUserInfo = getCurrentUserInfo()
-    if (sessionUserInfo && sessionUserInfo.account) {
-      // 如果会话中有用户信息，则使用会话中的信息
-      userInfo.value = sessionUserInfo
+    // 总是从服务器获取最新的用户信息，而不是优先使用会话中的信息
+    const response = await UserClient.userInfo()
+    console.log('User info response:', response)
+    const result = new Result<UserInfoVo>(response)
+    if (result.isSuccess()) {
+      const userData = result.getDataOrDefault({})
+      console.log('User data:', userData)
+      // 使用 Object.assign 确保响应式更新
+      Object.assign(userInfo.value, userData)
+      // 保存到会话中供后续使用
+      SessionManager.saveCurrentSessionData('userInfo', userInfo.value)
     } else {
-      // 否则从服务器获取用户信息
-      const response = await UserClient.userInfo()
-      const result = new Result(response)
-      if (result.isSuccess()) {
-        userInfo.value = result.data || {}
-        // 保存到会话中
-        SessionManager.saveCurrentSessionData('userInfo', userInfo.value)
-      } else {
-        throw new Error(result.message || '获取用户信息失败')
-      }
+      throw new Error(result.message || '获取用户信息失败')
     }
   } catch (error: any) {
     console.error('获取用户信息失败:', error)

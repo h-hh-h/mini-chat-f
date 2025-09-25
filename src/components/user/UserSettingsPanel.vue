@@ -26,10 +26,14 @@ export default {
 
     // 初始化表单数据
     watch(() => props.userInfo, (newUserInfo) => {
-      userInfoForm.value.nickName = newUserInfo.nickName || ''
-      userInfoForm.value.avatar = newUserInfo.avatar || ''
-      userInfoForm.value.phone = newUserInfo.phone || ''
-      userInfoForm.value.email = newUserInfo.email || ''
+      console.log('UserSettingsPanel received userInfo:', newUserInfo)
+      if (newUserInfo && Object.keys(newUserInfo).length > 0) {
+        userInfoForm.value.nickName = newUserInfo.nickName || ''
+        userInfoForm.value.avatar = newUserInfo.avatar || ''
+        userInfoForm.value.phone = newUserInfo.phone || ''
+        userInfoForm.value.email = newUserInfo.email || ''
+        console.log('Updated form values:', userInfoForm.value)
+      }
     }, { immediate: true })
 
     // 更新用户信息

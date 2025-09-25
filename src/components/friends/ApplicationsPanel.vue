@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
-import { ApplyClient, UserClient } from '../../api'
+import { ApplyClient, FriendClient, UserClient } from '../../api'
 import { ApplyResp, ApplyRespStatusEnum } from '../../api/types/response/ApplyResp'
 import { ApplyBatchReq } from '../../api/types/request/ApplyBatchReq'
 import { ApplyReq } from '../../api/types/request/ApplyReq'
-import { UserInfoVo as UserInfo } from '../../api/types/request/UserInfoVo'
+import { VerifyCodeReq } from '../../api/types/request/VerifyCodeReq'
 import { Result } from '../../api/types/response/base/Result'
+import { UserInfoVo } from '../../api/types/request/UserInfoVo'
+import { generateNicknameAvatar } from '../../utils/avatarUtils'
 
 const toast = useToast()
 const emit = defineEmits(['close'])
@@ -21,7 +23,7 @@ const applicationTab = ref<'received' | 'sent'>('received')
 
 // Friend search and application
 const searchAccount = ref('')
-const searchResult = ref<UserInfo | null>(null)
+const searchResult = ref<UserInfoVo | null>(null)
 const searching = ref(false)
 const searchError = ref('')
 
@@ -118,6 +120,135 @@ const formatApplicationDate = (date: Date | string | undefined) => {
   return ''
 }
 
+// 处理头像显示逻辑
+const getAvatarUrl = (avatar: string | null | undefined, nickName: string | undefined) => {
+  console.log('Processing avatar:', avatar, 'name:', nickName);
+  
+  // 检查是否是逗号分隔的多个头像
+  if (avatar && avatar.includes(',')) {
+    // 过滤掉无效值（包括null、undefined、空字符串和'null'字符串）
+    const avatarUrls = avatar.split(',').filter(url => url && url.trim() !== '' && url !== 'null');
+    console.log('Multiple avatars detected:', avatarUrls);
+    if (avatarUrls.length > 0) {
+      // 如果有有效的头像，生成九宫格头像
+      return generateGroupAvatar(avatarUrls, nickName);
+    } else {
+      // 如果所有头像都无效，使用默认头像
+      const defaultAvatar = generateNicknameAvatar(nickName);
+      console.log('All avatars are invalid, using default avatar for name:', nickName, 'avatar:', defaultAvatar);
+      return defaultAvatar;
+    }
+  }
+  
+  // 检查单个头像是否为无效值
+  if (!avatar || avatar === 'null' || avatar.trim() === '') {
+    const defaultAvatar = generateNicknameAvatar(nickName);
+    console.log('Invalid single avatar, using default avatar for name:', nickName, 'avatar:', defaultAvatar);
+    return defaultAvatar;
+  }
+  
+  console.log('Using provided avatar:', avatar);
+  return avatar;
+}
+
+// 生成群聊九宫格头像
+function generateGroupAvatar(avatarUrls: string[], groupName: string | undefined): string {
+  console.log('Generating group avatar with urls:', avatarUrls, 'group name:', groupName);
+  
+  // 处理每个头像，确保使用之前的用户头像逻辑（为null时使用默认的）
+  const processedAvatars = avatarUrls.map((avatar, index) => {
+    // 为每个头像生成一个默认名称（基于群名称和索引）
+    const defaultName = groupName ? `${groupName}${index + 1}` : `Member${index + 1}`;
+    const processedAvatar = getAvatarUrl(avatar, defaultName);
+    console.log(`Processed avatar ${index}:`, avatar, '->', processedAvatar);
+    return processedAvatar;
+  });
+  
+  // 取前4个成员的头像
+  const avatars = processedAvatars.slice(0, 4);
+  console.log('Final avatars for grid:', avatars);
+
+  // 如果只有一个成员，直接返回该成员头像
+  if (avatars.length === 1) {
+    console.log('Single avatar, returning directly:', avatars[0]);
+    return avatars[0];
+  }
+
+  // 创建SVG九宫格头像
+  const svgWidth = 100;
+  const svgHeight = 100;
+  const halfWidth = svgWidth / 2;
+  const halfHeight = svgHeight / 2;
+
+  let svgContent = `<svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">`;
+  
+  switch (avatars.length) {
+    case 2:
+      // 左右分半
+      console.log('Generating 2-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipLeft">
+          <rect x="0" y="0" width="${halfWidth}" height="${svgHeight}" />
+        </clipPath>
+        <clipPath id="clipRight">
+          <rect x="${halfWidth}" y="0" width="${halfWidth}" height="${svgHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipLeft)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipRight)" />`;
+      break;
+      
+    case 3:
+      // 上面一个完整，下面左右分半
+      console.log('Generating 3-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipTop">
+          <rect x="0" y="0" width="${svgWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomLeft">
+          <rect x="0" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomRight">
+          <rect x="${halfWidth}" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTop)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomLeft)" />`;
+      svgContent += `<image href="${avatars[2]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomRight)" />`;
+      break;
+      
+    case 4:
+      // 四宫格
+      console.log('Generating 4-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipTopLeft">
+          <rect x="0" y="0" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipTopRight">
+          <rect x="${halfWidth}" y="0" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomLeft">
+          <rect x="0" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomRight">
+          <rect x="${halfWidth}" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTopLeft)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTopRight)" />`;
+      svgContent += `<image href="${avatars[2]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomLeft)" />`;
+      svgContent += `<image href="${avatars[3]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomRight)" />`;
+      break;
+  }
+  
+  svgContent += '</svg>';
+  
+  // 返回base64编码的SVG
+  const result = `data:image/svg+xml;base64,${btoa(svgContent)}`;
+  console.log('Generated group avatar:', result);
+  return result;
+}
+
 // 接受好友申请
 const acceptFriendApplication = async (application: ApplyResp) => {
   try {
@@ -189,7 +320,7 @@ const searchUser = async () => {
         userId: 'user-' + Date.now(),
         account: searchAccount.value,
         nickName: 'User ' + searchAccount.value,
-        avatar: 'https://www.gravatar.com/avatar?d=mp'
+        avatar: '/default-avatar.svg'
       }
       return
     }
@@ -297,7 +428,7 @@ const deleteFriendApplication = async (applyId: string) => {
 
         <div v-if="searchResult" class="search-result">
           <div class="result-user">
-            <img :src="searchResult.avatar || 'https://www.gravatar.com/avatar?d=mp'"
+            <img :src="getAvatarUrl(searchResult.avatar, searchResult.nickName)"
               :alt="searchResult.nickName || 'User Avatar'" class="result-avatar" />
             <div class="result-info">
               <div class="result-name">{{ searchResult.nickName || searchResult.account }}</div>
@@ -330,7 +461,7 @@ const deleteFriendApplication = async (applyId: string) => {
             :class="{ 'application-wait': application.status === applyRespStatus.Wait }">
             <div class="application-info">
               <div class="application-user">
-                <img :src="'https://www.gravatar.com/avatar?d=mp'" :alt="application.nickName || 'User Avatar'"
+                <img :src="getAvatarUrl(null, application.nickName)" :alt="application.nickName || 'User Avatar'"
                   class="application-avatar" />
                 <div class="application-user-info">
                   <div class="application-nickname">{{ application.nickName || application.account }}</div>

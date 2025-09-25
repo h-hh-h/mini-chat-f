@@ -4,10 +4,11 @@ import { ApplyBatchReq } from '../../types/request/ApplyBatchReq';
 import { ApplyReq } from '../../types/request/ApplyReq';
 import { ApplyBatchResp } from '../../types/response/ApplyBatchResp';
 import { ApplyResp } from '../../types/response/ApplyResp';
+import { HTTP_BASE_URL } from '@/config/appConfig';
 
 class ApplyClient extends BaseClient {
     constructor() {
-        super('');
+        super(HTTP_BASE_URL);
     }
 
     /**

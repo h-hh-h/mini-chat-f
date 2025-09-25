@@ -47,6 +47,10 @@ const loading = ref(false)
 const sendingEmailCode = ref(false)
 const sendingPhoneCode = ref(false)
 
+// 验证码显示
+const emailVerificationCode = ref('')
+const phoneVerificationCode = ref('')
+
 // 是否显示验证码输入框
 const showEmailCodeInput = computed(() => {
   return isRegisterMode.value && loginForm.email
@@ -70,6 +74,10 @@ const resetForm = () => {
   Object.keys(errors.value).forEach(key => {
     (errors.value as any)[key] = ''
   })
+  
+  // 清空验证码显示
+  emailVerificationCode.value = ''
+  phoneVerificationCode.value = ''
   
   // 默认登录方式为密码登录
   loginMethod.value = 'password'
@@ -191,8 +199,14 @@ const sendEmailCode = async () => {
   
   try {
     sendingEmailCode.value = true
-    await AuthClient.emailCode(loginForm.email)
-    toast.add({ severity: 'success', summary: '成功', detail: '验证码已发送至您的邮箱', life: 3000 })
+    const response = await AuthClient.emailCode(loginForm.email)
+    const result = new Result(response)
+    if (result.isSuccess() && result.data) {
+      emailVerificationCode.value = result.data
+      toast.add({ severity: 'success', summary: '成功', detail: '验证码已发送至您的邮箱', life: 3000 })
+    } else {
+      toast.add({ severity: 'error', summary: '错误', detail: result.message || '发送邮箱验证码失败', life: 3000 })
+    }
   } catch (error: any) {
     console.error('发送邮箱验证码失败:', error)
     toast.add({ severity: 'error', summary: '错误', detail: error.message || '发送邮箱验证码失败', life: 3000 })
@@ -215,8 +229,14 @@ const sendPhoneCode = async () => {
   
   try {
     sendingPhoneCode.value = true
-    await AuthClient.phoneCode(loginForm.phone)
-    toast.add({ severity: 'success', summary: '成功', detail: '验证码已发送至您的手机', life: 3000 })
+    const response = await AuthClient.phoneCode(loginForm.phone)
+    const result = new Result(response)
+    if (result.isSuccess() && result.data) {
+      phoneVerificationCode.value = result.data
+      toast.add({ severity: 'success', summary: '成功', detail: '验证码已发送至您的手机', life: 3000 })
+    } else {
+      toast.add({ severity: 'error', summary: '错误', detail: result.message || '发送手机验证码失败', life: 3000 })
+    }
   } catch (error: any) {
     console.error('发送手机验证码失败:', error)
     toast.add({ severity: 'error', summary: '错误', detail: error.message || '发送手机验证码失败', life: 3000 })
@@ -408,6 +428,10 @@ const submitForm = () => {
             />
           </div>
           <small v-if="errors.phone" class="p-error">{{ errors.phone }}</small>
+          <!-- 显示手机验证码 -->
+          <div v-if="phoneVerificationCode" class="verification-code-display">
+            <small class="verification-code">测试验证码: {{ phoneVerificationCode }}</small>
+          </div>
         </div>
         
         <div v-if="!isRegisterMode && loginMethod === 'verification' && loginForm.phone" class="form-field">
@@ -444,6 +468,10 @@ const submitForm = () => {
             />
           </div>
           <small v-if="errors.email" class="p-error">{{ errors.email }}</small>
+          <!-- 显示邮箱验证码 -->
+          <div v-if="emailVerificationCode" class="verification-code-display">
+            <small class="verification-code">测试验证码: {{ emailVerificationCode }}</small>
+          </div>
         </div>
         
         <div v-if="!isRegisterMode && loginMethod === 'verification' && loginForm.email" class="form-field">
@@ -514,6 +542,10 @@ const submitForm = () => {
             />
           </div>
           <small v-if="errors.email" class="p-error">{{ errors.email }}</small>
+          <!-- 显示邮箱验证码 -->
+          <div v-if="emailVerificationCode" class="verification-code-display">
+            <small class="verification-code">测试验证码: {{ emailVerificationCode }}</small>
+          </div>
         </div>
         
         <div v-if="showEmailCodeInput" class="form-field">
@@ -550,6 +582,10 @@ const submitForm = () => {
             />
           </div>
           <small v-if="errors.phone" class="p-error">{{ errors.phone }}</small>
+          <!-- 显示手机验证码 -->
+          <div v-if="phoneVerificationCode" class="verification-code-display">
+            <small class="verification-code">测试验证码: {{ phoneVerificationCode }}</small>
+          </div>
         </div>
         
         <div v-if="showPhoneCodeInput" class="form-field">
@@ -754,6 +790,20 @@ const submitForm = () => {
 .p-error {
   display: block;
   margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.verification-code-display {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background-color: #e3f2fd;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.verification-code {
+  color: #1976d2;
+  font-weight: 500;
   font-size: 0.85rem;
 }
 

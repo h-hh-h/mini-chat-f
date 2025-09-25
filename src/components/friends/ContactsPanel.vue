@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { FriendClient, RoomClient } from '../../api'
+import { Result } from '../../api/types/response/base/Result'
 import { FriendInfo } from '../../api/types/base/FriendInfo'
-import { SingleRoomQueryReq } from '../../api/types/request/SingleRoomQueryReq'
+import { RoomSimpleInfo, RoomSimpleInfoRoomTypeEnum } from '../../api/types/base/RoomSimpleInfo'
 import { GroupCreateReq } from '../../api/types/request/GroupCreateReq'
 import { GroupCompleteInfo } from '../../api/types/base/GroupCompleteInfo'
-import { RoomSimpleInfo, RoomSimpleInfoRoomTypeEnum } from '../../api/types/base/RoomSimpleInfo'
-import { Result } from '../../api/types/response/base/Result'
+import { SingleRoomQueryReq } from '../../api/types/request/SingleRoomQueryReq'
+import { generateNicknameAvatar } from '../../utils/avatarUtils'
 
 const emit = defineEmits<{
   (e: 'switch-section', section: 'chats' | 'contacts'): void
@@ -64,13 +65,13 @@ const loadFriends = async () => {
           userId: 'user-1',
           account: 'user1',
           name: 'User 1',
-          avatar: 'https://www.gravatar.com/avatar?d=mp'
+          avatar: '/default-avatar.svg'
         },
         {
           userId: 'user-2',
           account: 'user2',
           name: 'User 2',
-          avatar: 'https://www.gravatar.com/avatar?d=mp'
+          avatar: '/default-avatar.svg'
         }
       ]
       return
@@ -90,7 +91,7 @@ const loadFriends = async () => {
           userId: 'user-1',
           account: 'user1',
           name: 'User 1',
-          avatar: 'https://www.gravatar.com/avatar?d=mp'
+          avatar: '/default-avatar.svg'
         }
       ]
     } else {
@@ -113,13 +114,13 @@ const loadGroups = async () => {
           roomId: 'group-1',
           name: 'Group 1',
           roomType: RoomSimpleInfoRoomTypeEnum.Group,
-          avatar: 'https://www.gravatar.com/avatar?d=mp'
+          avatar: '/default-avatar.svg'
         },
         {
           roomId: 'group-2',
           name: 'Group 2',
           roomType: RoomSimpleInfoRoomTypeEnum.Group,
-          avatar: 'https://www.gravatar.com/avatar?d=mp'
+          avatar: '/default-avatar.svg'
         }
       ]
       return
@@ -265,6 +266,136 @@ const openGroupChat = (group: RoomSimpleInfo) => {
   // 切换到聊天板块
   emit('switch-section', 'chats');
 }
+
+// 处理头像显示逻辑
+function getAvatarUrl(avatar: string | null | undefined, name: string | undefined) {
+  console.log('Processing avatar:', avatar, 'name:', name);
+  
+  // 检查是否是逗号分隔的多个头像
+  if (avatar && avatar.includes(',')) {
+    // 过滤掉无效值（包括null、undefined、空字符串和'null'字符串）
+    const avatarUrls = avatar.split(',').filter(url => url && url.trim() !== '' && url !== 'null');
+    console.log('Multiple avatars detected:', avatarUrls);
+    if (avatarUrls.length > 0) {
+      // 如果有有效的头像，生成九宫格头像
+      return generateGroupAvatar(avatarUrls, name);
+    } else {
+      // 如果所有头像都无效，使用默认头像
+      const defaultAvatar = generateNicknameAvatar(name);
+      console.log('All avatars are invalid, using default avatar for name:', name, 'avatar:', defaultAvatar);
+      return defaultAvatar;
+    }
+  }
+  
+  // 检查单个头像是否为无效值
+  if (!avatar || avatar === 'null' || avatar.trim() === '') {
+    const defaultAvatar = generateNicknameAvatar(name);
+    console.log('Invalid single avatar, using default avatar for name:', name, 'avatar:', defaultAvatar);
+    return defaultAvatar;
+  }
+  
+  console.log('Using provided avatar:', avatar);
+  return avatar;
+}
+
+// 生成群聊九宫格头像
+function generateGroupAvatar(avatarUrls: string[], groupName: string | undefined): string {
+  console.log('Generating group avatar with urls:', avatarUrls, 'group name:', groupName);
+  
+  // 处理每个头像，确保使用之前的用户头像逻辑（为null时使用默认的）
+  const processedAvatars = avatarUrls.map((avatar, index) => {
+    // 为每个头像生成一个默认名称（基于群名称和索引）
+    const defaultName = groupName ? `${groupName}${index + 1}` : `Member${index + 1}`;
+    const processedAvatar = getAvatarUrl(avatar, defaultName);
+    console.log(`Processed avatar ${index}:`, avatar, '->', processedAvatar);
+    return processedAvatar;
+  });
+  
+  // 取前4个成员的头像
+  const avatars = processedAvatars.slice(0, 4);
+  console.log('Final avatars for grid:', avatars);
+
+  // 如果只有一个成员，直接返回该成员头像
+  if (avatars.length === 1) {
+    console.log('Single avatar, returning directly:', avatars[0]);
+    return avatars[0];
+  }
+
+  // 创建SVG九宫格头像
+  const svgWidth = 100;
+  const svgHeight = 100;
+  const halfWidth = svgWidth / 2;
+  const halfHeight = svgHeight / 2;
+
+  let svgContent = `<svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">`;
+  
+  switch (avatars.length) {
+    case 2:
+      // 左右分半
+      console.log('Generating 2-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipLeft">
+          <rect x="0" y="0" width="${halfWidth}" height="${svgHeight}" />
+        </clipPath>
+        <clipPath id="clipRight">
+          <rect x="${halfWidth}" y="0" width="${halfWidth}" height="${svgHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipLeft)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipRight)" />`;
+      break;
+      
+    case 3:
+      // 上面一个完整，下面左右分半
+      console.log('Generating 3-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipTop">
+          <rect x="0" y="0" width="${svgWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomLeft">
+          <rect x="0" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomRight">
+          <rect x="${halfWidth}" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTop)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomLeft)" />`;
+      svgContent += `<image href="${avatars[2]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomRight)" />`;
+      break;
+      
+    case 4:
+      // 四宫格
+      console.log('Generating 4-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipTopLeft">
+          <rect x="0" y="0" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipTopRight">
+          <rect x="${halfWidth}" y="0" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomLeft">
+          <rect x="0" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomRight">
+          <rect x="${halfWidth}" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTopLeft)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTopRight)" />`;
+      svgContent += `<image href="${avatars[2]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomLeft)" />`;
+      svgContent += `<image href="${avatars[3]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomRight)" />`;
+      break;
+  }
+  
+  svgContent += '</svg>';
+  
+  // 返回base64编码的SVG
+  const result = `data:image/svg+xml;base64,${btoa(svgContent)}`;
+  console.log('Generated group avatar:', result);
+  return result;
+}
+
 </script>
 
 <template>
@@ -301,7 +432,7 @@ const openGroupChat = (group: RoomSimpleInfo) => {
             <div v-for="friend in friends" :key="friend.userId" class="friend-selection-item"
               :class="{ selected: selectedFriends.has(friend.userId || '') }"
               @click="toggleFriendSelection(friend.userId || '')">
-              <img :src="friend.avatar || 'https://www.gravatar.com/avatar?d=mp'"
+              <img :src="friend.avatar || '/default-avatar.svg'"
                 :alt="friend.name || 'Friend Avatar'" class="friend-avatar" />
               <div class="friend-details">
                 <div class="friend-name">{{ friend.name || friend.account }}</div>
@@ -334,7 +465,7 @@ const openGroupChat = (group: RoomSimpleInfo) => {
           <div class="friends-list">
             <div v-for="friend in friends" :key="friend.userId" class="friend-item"
               @click="openPrivateChat(friend)">
-              <img :src="friend.avatar || 'https://www.gravatar.com/avatar?d=mp'"
+              <img :src="getAvatarUrl(friend.avatar, friend.name || friend.account)"
                 :alt="friend.name || 'Friend Avatar'" class="friend-avatar" />
               <div class="friend-details">
                 <div class="friend-name">{{ friend.name || friend.account }}</div>
@@ -355,10 +486,9 @@ const openGroupChat = (group: RoomSimpleInfo) => {
             <div v-for="group in groups" :key="group.roomId" class="group-item"
               :class="{ active: selectedGroup?.roomId === group.roomId }"
               @click="openGroupChat(group)">
-              <img :src="group.avatar || 'https://www.gravatar.com/avatar?d=mp'"
-                :alt="group.name || 'Group Avatar'" class="group-avatar" />
+              <img :src="getAvatarUrl(group.avatar, group.name)" :alt="group.name || 'Group Avatar'" class="group-avatar" />
               <div class="group-details">
-                <div class="group-name">{{ group.name || 'Unnamed Group' }}</div>
+                <div class="group-name">{{ group.name }}</div>
               </div>
             </div>
 
@@ -557,22 +687,6 @@ const openGroupChat = (group: RoomSimpleInfo) => {
   height: 40px;
   border-radius: 50%;
   margin-right: 0.75rem;
-}
-
-.friend-details,
-.group-details {
-  flex: 1;
-}
-
-.friend-name,
-.group-name {
-  font-weight: 500;
-  color: #2c3e50;
-}
-
-.friend-account {
-  font-size: 0.8rem;
-  color: #7f8c8d;
 }
 
 .loading {

@@ -3,10 +3,11 @@ import { Result } from '../../types/response/base/Result';
 import { LoginReq } from '../../types/request/LoginReq';
 import { LoginResp } from '../../types/response/LoginResp';
 import { VerifyCodeReq } from '../../types/request/VerifyCodeReq';
+import { AUTH_USER_SERVER_BASE_URL } from '@/config/appConfig';
 
 class AuthClient extends BaseClient {
     constructor() {
-        super('');
+        super(AUTH_USER_SERVER_BASE_URL);
     }
 
     /**
@@ -40,7 +41,7 @@ class AuthClient extends BaseClient {
      * @param email
      * @returns
      */
-    emailCode(email: string): Promise<Result<null>> {
+    emailCode(email: string): Promise<Result<string>> {
         return this.post('/auth/code/email', null, { params: { email } });
     }
 
@@ -49,7 +50,7 @@ class AuthClient extends BaseClient {
      * @param phone
      * @returns
      */
-    phoneCode(phone: string): Promise<Result<null>> {
+    phoneCode(phone: string): Promise<Result<string>> {
         return this.post('/auth/code/phone', null, { params: { phone } });
     }
 
@@ -58,7 +59,7 @@ class AuthClient extends BaseClient {
      * @param random
      * @returns
      */
-    imageCode(random: number): Promise<Result<null>> {
+    imageCode(random: number): Promise<Result<string>> {
         return this.post('/auth/code/image', null, { params: { random } });
     }
 

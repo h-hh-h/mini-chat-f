@@ -13,7 +13,7 @@ export class UserInfoVo {
     /**
     * 用户昵称
     */
-    'nickName'?: string | null;
+    'nickName'?: string;
     /**
     * 用户头像
     */

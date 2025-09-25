@@ -2,9 +2,10 @@
 import { ref, onMounted, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { RoomClient } from '../../api'
-import { RoomSimpleInfo } from '../../api/types/base/RoomSimpleInfo'
-import { CursorReq } from '../../api/types/request/CursorReq'
 import { Result } from '../../api/types/response/base/Result'
+import { RoomSimpleInfo } from '../../api/types/base/RoomSimpleInfo'
+import { generateNicknameAvatar } from '../../utils/avatarUtils'
+import { CursorReq } from '../../api/types/request/CursorReq'
 
 // 定义props
 const props = defineProps<{
@@ -143,33 +144,159 @@ const openRoomDetails = (room: RoomSimpleInfo) => {
   emit('open-room-details', room)
 }
 
+// 处理头像显示逻辑
+function getAvatarUrl(avatar: string | null | undefined, name: string | undefined) {
+  console.log('Processing avatar:', avatar, 'name:', name);
+  
+  // 检查是否是逗号分隔的多个头像
+  if (avatar && avatar.includes(',')) {
+    // 过滤掉无效值（包括null、undefined、空字符串和'null'字符串）
+    const avatarUrls = avatar.split(',').filter(url => url && url.trim() !== '' && url !== 'null');
+    console.log('Multiple avatars detected:', avatarUrls);
+    if (avatarUrls.length > 0) {
+      // 如果有有效的头像，生成九宫格头像
+      return generateGroupAvatar(avatarUrls, name);
+    } else {
+      // 如果所有头像都无效，使用默认头像
+      const defaultAvatar = generateNicknameAvatar(name);
+      console.log('All avatars are invalid, using default avatar for name:', name, 'avatar:', defaultAvatar);
+      return defaultAvatar;
+    }
+  }
+  
+  // 检查单个头像是否为无效值
+  if (!avatar || avatar === 'null' || avatar.trim() === '') {
+    const defaultAvatar = generateNicknameAvatar(name);
+    console.log('Invalid single avatar, using default avatar for name:', name, 'avatar:', defaultAvatar);
+    return defaultAvatar;
+  }
+  
+  console.log('Using provided avatar:', avatar);
+  return avatar;
+}
+
+// 生成群聊九宫格头像
+function generateGroupAvatar(avatarUrls: string[], groupName: string | undefined): string {
+  console.log('Generating group avatar with urls:', avatarUrls, 'group name:', groupName);
+  
+  // 处理每个头像，确保使用之前的用户头像逻辑（为null时使用默认的）
+  const processedAvatars = avatarUrls.map((avatar, index) => {
+    // 为每个头像生成一个默认名称（基于群名称和索引）
+    const defaultName = groupName ? `${groupName}${index + 1}` : `Member${index + 1}`;
+    const processedAvatar = getAvatarUrl(avatar, defaultName);
+    console.log(`Processed avatar ${index}:`, avatar, '->', processedAvatar);
+    return processedAvatar;
+  });
+  
+  // 取前4个成员的头像
+  const avatars = processedAvatars.slice(0, 4);
+  console.log('Final avatars for grid:', avatars);
+
+  // 如果只有一个成员，直接返回该成员头像
+  if (avatars.length === 1) {
+    console.log('Single avatar, returning directly:', avatars[0]);
+    return avatars[0];
+  }
+
+  // 创建SVG九宫格头像
+  const svgWidth = 100;
+  const svgHeight = 100;
+  const halfWidth = svgWidth / 2;
+  const halfHeight = svgHeight / 2;
+
+  let svgContent = `<svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">`;
+  
+  switch (avatars.length) {
+    case 2:
+      // 左右分半
+      console.log('Generating 2-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipLeft">
+          <rect x="0" y="0" width="${halfWidth}" height="${svgHeight}" />
+        </clipPath>
+        <clipPath id="clipRight">
+          <rect x="${halfWidth}" y="0" width="${halfWidth}" height="${svgHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipLeft)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipRight)" />`;
+      break;
+      
+    case 3:
+      // 上面一个完整，下面左右分半
+      console.log('Generating 3-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipTop">
+          <rect x="0" y="0" width="${svgWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomLeft">
+          <rect x="0" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomRight">
+          <rect x="${halfWidth}" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTop)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomLeft)" />`;
+      svgContent += `<image href="${avatars[2]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomRight)" />`;
+      break;
+      
+    case 4:
+      // 四宫格
+      console.log('Generating 4-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipTopLeft">
+          <rect x="0" y="0" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipTopRight">
+          <rect x="${halfWidth}" y="0" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomLeft">
+          <rect x="0" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomRight">
+          <rect x="${halfWidth}" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTopLeft)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTopRight)" />`;
+      svgContent += `<image href="${avatars[2]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomLeft)" />`;
+      svgContent += `<image href="${avatars[3]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomRight)" />`;
+      break;
+  }
+  
+  svgContent += '</svg>';
+  
+  // 返回base64编码的SVG
+  const result = `data:image/svg+xml;base64,${btoa(svgContent)}`;
+  console.log('Generated group avatar:', result);
+  return result;
+}
+
 </script>
 
 <template>
   <div class="chats-section">
     <div v-if="loadingRooms" class="loading">Loading chats...</div>
     <div v-else class="rooms-list">
-      <div v-for="room in rooms" :key="room.roomId" class="room-container">
-        <div @click="selectRoom(room)" :class="['room-item', { active: props.selectedRoom?.roomId === room.roomId }]">
-          <img :src="room.avatar || 'https://www.gravatar.com/avatar?d=mp'" :alt="room.name || 'Room Avatar'"
-            class="room-avatar" />
-          <div class="room-details">
-            <div class="room-name">{{ room.name || 'Unnamed Room' }}</div>
-            <div class="room-last-message">
-              {{ room.lastMsgInfo?.content || 'No messages yet' }}
-            </div>
-          </div>
-          <div class="room-meta">
-            <div class="room-time" v-if="room.lastMsgInfo?.time">
-              {{ formatTime(room.lastMsgInfo.time) }}
-            </div>
-            <div class="room-unread" v-if="room.unread && room.unread > 0">
-              {{ room.unread }}
-            </div>
+      <div v-for="room in rooms" :key="room.roomId" @click="selectRoom(room)"
+        :class="['room-item', { active: selectedRoom?.roomId === room.roomId }]">
+        <img :src="getAvatarUrl(room.avatar, room.name)" :alt="room.name || 'Room Avatar'"
+          class="room-avatar" />
+        <div class="room-details">
+          <div class="room-name">{{ room.name || 'Unnamed Room' }}</div>
+          <div class="room-last-message">
+            {{ room.lastMsgInfo?.content || 'No messages yet' }}
           </div>
         </div>
-        <Button icon="pi pi-cog" class="room-settings-btn p-button-rounded p-button-text p-button-sm"
-          @click="openRoomDetails(room)" v-tooltip="'房间设置'" />
+        <div class="room-meta">
+          <div class="room-time" v-if="room.lastMsgInfo?.time">
+            {{ formatTime(room.lastMsgInfo.time) }}
+          </div>
+          <div class="room-unread" v-if="room.unread && room.unread > 0">
+            {{ room.unread }}
+          </div>
+        </div>
       </div>
     </div>
   </div>

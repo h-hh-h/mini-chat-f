@@ -1,10 +1,11 @@
 import BaseClient from '../BaseClient';
 import { Result } from '../../types/response/base/Result';
 import { UserInfoVo } from '../../types/request/UserInfoVo';
+import { AUTH_USER_SERVER_BASE_URL } from '@/config/appConfig';
 
 class UserClient extends BaseClient {
     constructor() {
-        super('');
+        super(AUTH_USER_SERVER_BASE_URL);
     }
 
     /**

@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
-import { MsgClient, RoomClient } from '../../api'
+import { MemberInfo } from '../../api/types/base/MemberInfo'
+import { RoomClient } from '../../api'
+import { GroupCompleteInfo } from '../../api/types/base/GroupCompleteInfo'
+import { Result } from '../../api/types/response/base/Result'
+import { MsgClient } from '../../api'
+import { generateNicknameAvatar } from '../../utils/avatarUtils'
+
 interface ExtendedRoomSimpleInfo extends RoomSimpleInfo {
   lastMessage?: string
   lastMessageTime?: number
@@ -13,7 +19,6 @@ import { ChatCommendReq, ChatCommendReqRoomTypeEnum, ChatCommendReqMsgTypeEnum }
 import { CursorReq } from '../../api/types/request/CursorReq'
 import { ChatMsgPollReq, ChatMsgPollReqRoomTypeEnum } from '../../api/types/request/ChatMsgPollReq'
 import { RoomMsgReadReq } from '../../api/types/request/RoomMsgReadReq'
-import { Result } from '../../api/types/response/base/Result'
 
 const props = defineProps<{
   selectedRoom: ExtendedRoomSimpleInfo | null
@@ -645,6 +650,135 @@ const formatTime = (timestamp: number | undefined) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+// 处理房间头像显示逻辑
+const getRoomAvatarUrl = (avatar: string | null | undefined, roomName: string | undefined) => {
+  console.log('Processing room avatar:', avatar, 'name:', roomName);
+  
+  // 检查是否是逗号分隔的多个头像
+  if (avatar && avatar.includes(',')) {
+    // 过滤掉无效值（包括null、undefined、空字符串和'null'字符串）
+    const avatarUrls = avatar.split(',').filter(url => url && url.trim() !== '' && url !== 'null');
+    console.log('Multiple avatars detected:', avatarUrls);
+    if (avatarUrls.length > 0) {
+      // 如果有有效的头像，生成九宫格头像
+      return generateGroupAvatar(avatarUrls, roomName);
+    } else {
+      // 如果所有头像都无效，使用默认头像
+      const defaultAvatar = generateNicknameAvatar(roomName);
+      console.log('All avatars are invalid, using default avatar for name:', roomName, 'avatar:', defaultAvatar);
+      return defaultAvatar;
+    }
+  }
+  
+  // 检查单个头像是否为无效值
+  if (!avatar || avatar === 'null' || avatar.trim() === '') {
+    const defaultAvatar = generateNicknameAvatar(roomName);
+    console.log('Invalid single avatar, using default avatar for name:', roomName, 'avatar:', defaultAvatar);
+    return defaultAvatar;
+  }
+  
+  console.log('Using provided avatar:', avatar);
+  return avatar;
+}
+
+// 生成群聊九宫格头像
+function generateGroupAvatar(avatarUrls: string[], groupName: string | undefined): string {
+  console.log('Generating group avatar with urls:', avatarUrls, 'group name:', groupName);
+  
+  // 处理每个头像，确保使用之前的用户头像逻辑（为null时使用默认的）
+  const processedAvatars = avatarUrls.map((avatar, index) => {
+    // 为每个头像生成一个默认名称（基于群名称和索引）
+    const defaultName = groupName ? `${groupName}${index + 1}` : `Member${index + 1}`;
+    const processedAvatar = getRoomAvatarUrl(avatar, defaultName);
+    console.log(`Processed avatar ${index}:`, avatar, '->', processedAvatar);
+    return processedAvatar;
+  });
+  
+  // 取前4个成员的头像
+  const avatars = processedAvatars.slice(0, 4);
+  console.log('Final avatars for grid:', avatars);
+
+  // 如果只有一个成员，直接返回该成员头像
+  if (avatars.length === 1) {
+    console.log('Single avatar, returning directly:', avatars[0]);
+    return avatars[0];
+  }
+
+  // 创建SVG九宫格头像
+  const svgWidth = 100;
+  const svgHeight = 100;
+  const halfWidth = svgWidth / 2;
+  const halfHeight = svgHeight / 2;
+
+  let svgContent = `<svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">`;
+  
+  switch (avatars.length) {
+    case 2:
+      // 左右分半
+      console.log('Generating 2-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipLeft">
+          <rect x="0" y="0" width="${halfWidth}" height="${svgHeight}" />
+        </clipPath>
+        <clipPath id="clipRight">
+          <rect x="${halfWidth}" y="0" width="${halfWidth}" height="${svgHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipLeft)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipRight)" />`;
+      break;
+      
+    case 3:
+      // 上面一个完整，下面左右分半
+      console.log('Generating 3-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipTop">
+          <rect x="0" y="0" width="${svgWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomLeft">
+          <rect x="0" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomRight">
+          <rect x="${halfWidth}" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTop)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomLeft)" />`;
+      svgContent += `<image href="${avatars[2]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomRight)" />`;
+      break;
+      
+    case 4:
+      // 四宫格
+      console.log('Generating 4-avatar grid layout');
+      svgContent += `<defs>
+        <clipPath id="clipTopLeft">
+          <rect x="0" y="0" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipTopRight">
+          <rect x="${halfWidth}" y="0" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomLeft">
+          <rect x="0" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+        <clipPath id="clipBottomRight">
+          <rect x="${halfWidth}" y="${halfHeight}" width="${halfWidth}" height="${halfHeight}" />
+        </clipPath>
+      </defs>`;
+      svgContent += `<image href="${avatars[0]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTopLeft)" />`;
+      svgContent += `<image href="${avatars[1]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipTopRight)" />`;
+      svgContent += `<image href="${avatars[2]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomLeft)" />`;
+      svgContent += `<image href="${avatars[3]}" x="0" y="0" width="${svgWidth}" height="${svgHeight}" clip-path="url(#clipBottomRight)" />`;
+      break;
+  }
+  
+  svgContent += '</svg>';
+  
+  // 返回base64编码的SVG
+  const result = `data:image/svg+xml;base64,${btoa(svgContent)}`;
+  console.log('Generated group avatar:', result);
+  return result;
+}
+
 // 启动轮询（与WebSocket并行工作）
 const startPolling = () => {
   // 每5秒轮询一次，与WebSocket并行工作以确保即时性
@@ -775,7 +909,7 @@ const scrollToUnread = () => {
     <div v-else class="chat-container">
       <!-- Chat Header -->
       <div class="chat-header">
-        <img :src="props.selectedRoom.avatar || 'https://www.gravatar.com/avatar?d=mp'"
+        <img :src="getRoomAvatarUrl(props.selectedRoom.avatar, props.selectedRoom.name)"
           :alt="props.selectedRoom.name || 'Room Avatar'" class="room-avatar" />
         <div class="room-info">
           <div class="room-name">{{ props.selectedRoom.name || 'Unnamed Room' }}</div>

@@ -10,10 +10,12 @@ import type { MemberInfo } from '../../types/base/MemberInfo';
 import type { ChatMsgVo } from '../../types/response/ChatMsgVo';
 import type { SingleRoomQueryReq } from '@/api/types/request/SingleRoomQueryReq';
 import type { RoomMsgReadReq } from '@/api/types/request/RoomMsgReadReq';
+import { HTTP_BASE_URL } from '@/config/appConfig';
 
 class RoomClient extends BaseClient {
     constructor() {
-        super('');
+        // 修复：传入正确的 baseURL 而不是空字符串
+        super(HTTP_BASE_URL);
     }
 
     /**

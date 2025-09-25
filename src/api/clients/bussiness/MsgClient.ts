@@ -4,10 +4,11 @@ import { ChatCommendReq } from '../../types/request/ChatCommendReq';
 import { ChatMsgPollReq } from '../../types/request/ChatMsgPollReq';
 import { ChatAckVo } from '../../types/response/ChatAckVo';
 import { ChatMsgVo } from '../../types/response/ChatMsgVo';
+import { HTTP_BASE_URL } from '@/config/appConfig';
 
 class MsgClient extends BaseClient {
     constructor() {
-        super('');
+        super(HTTP_BASE_URL);
     }
 
     /**

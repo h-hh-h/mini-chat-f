@@ -3,10 +3,11 @@ import { Result } from '../../types/response/base/Result';
 import { CheckResp } from '../../types/response/CheckResp';
 import { PageResp } from '../../types/response/base/PageResp';
 import { FriendInfo } from '../../types/base/FriendInfo';
+import { HTTP_BASE_URL } from '@/config/appConfig';
 
 class FriendClient extends BaseClient {
     constructor() {
-        super('');
+        super(HTTP_BASE_URL);
     }
 
     checkFriend(friendId: string): Promise<Result<CheckResp>> {
